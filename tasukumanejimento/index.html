@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タスク管理ボード</title>
+  <style>
+    /* ===== 全体 ===== */
+    body {
+      font-family: sans-serif;
+      background-color: #1a6496;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      color: white;
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    /* ===== タスク追加フォーム ===== */
+    #form-area {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      max-width: 600px;
+      margin: 0 auto 30px auto;
+    }
+
+    #form-area h2 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+      color: #333;
+    }
+
+    /* フォームの各行 */
+    .form-row {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 12px;
+    }
+
+    .form-row label {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    /* テキスト入力・テキストエリア・日付入力の共通スタイル */
+    .form-row input[type="text"],
+    .form-row input[type="date"],
+    .form-row textarea {
+      padding: 8px;
+      font-size: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-family: sans-serif; /* textareaのフォントをbodyに合わせる */
+    }
+
+    .form-row textarea {
+      height: 60px;
+      resize: vertical; /* 縦方向だけリサイズ可能 */
+    }
+
+    #add-button {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      background-color: #27ae60;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 5px;
+    }
+
+    #add-button:hover {
+      background-color: #2ecc71;
+    }
+
+    /* ===== ボード（3列） ===== */
+    #board {
+      display: flex;       /* 子要素を横並びにする */
+      gap: 20px;           /* 列間の隙間 */
+      justify-content: center;
+      align-items: flex-start; /* 列の高さがバラバラでも上揃えにする */
+    }
+
+    /* ===== 各列 ===== */
+    .column {
+      background-color: #e0e0e0;
+      border-radius: 10px;
+      padding: 15px;
+      width: 250px;
+      min-height: 400px;
+    }
+
+    .column h2 {
+      text-align: center;
+      margin: 0 0 15px 0;
+      font-size: 18px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #aaa;
+    }
+
+    #todo h2  { color: #e74c3c; }
+    #doing h2 { color: #e67e22; }
+    #done h2  { color: #27ae60; }
+
+    /* ===== カード ===== */
+    .card {
+      background-color: white;
+      border-radius: 7px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+      border-left: 5px solid #ccc; /* 左端の色帯（デフォルトはグレー） */
+    }
+
+    /* カードのタイトル */
+    .card-title {
+      font-size: 15px;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    /* カードの説明文 */
+    .card-desc {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+      white-space: pre-wrap; /* 改行をそのまま表示 */
+      word-break: break-all;
+    }
+
+    /* 期限の表示 */
+    .card-deadline {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    /* 期限切れは赤く表示 */
+    .card-deadline.overdue {
+      color: #e74c3c;
+      font-weight: bold;
+    }
+
+    /* カードのボタンエリア */
+    .card-buttons {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .card-buttons button {
+      padding: 5px 10px;
+      font-size: 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      color: white;
+    }
+
+    .btn-move-right { background-color: #3498db; }
+    .btn-move-right:hover { background-color: #5dade2; }
+
+    .btn-move-left { background-color: #95a5a6; }
+    .btn-move-left:hover { background-color: #aab7b8; }
+
+    .btn-delete {
+      background-color: #e74c3c;
+      margin-left: auto; /* 右端に寄せる */
+    }
+    .btn-delete:hover { background-color: #ec7063; }
+
+    /* ===== 保存済みメッセージ ===== */
+    #save-msg {
+      text-align: center;
+      color: #aef;
+      font-size: 13px;
+      margin-bottom: 10px;
+      min-height: 18px; /* 表示/非表示でレイアウトがずれないよう高さ確保 */
+    }
+  </style>
+</head>
+<body>
+
+  <h1>タスク管理ボード</h1>
+
+  <!-- 自動保存されたことを知らせるメッセージ -->
+  <div id="save-msg"></div>
+
+  <!-- ===== タスク追加フォーム ===== -->
+  <div id="form-area">
+    <h2>➕ 新しいタスクを追加</h2>
+
+    <div class="form-row">
+      <label for="input-title">タイトル（必須）</label>
+      <input type="text" id="input-title" placeholder="例：レポートを書く">
+    </div>
+
+    <div class="form-row">
+      <label for="input-desc">説明文（任意）</label>
+      <textarea id="input-desc" placeholder="詳細・メモを書く（なくてもOK）"></textarea>
+    </div>
+
+    <div class="form-row">
+      <label for="input-deadline">期限（任意）</label>
+      <input type="date" id="input-deadline">
+    </div>
+
+    <button id="add-button" onclick="addTask()">タスクを追加</button>
+  </div>
+
+  <!-- ===== ボード ===== -->
+  <div id="board">
+    <div class="column" id="todo">
+      <h2>📋 やること</h2>
+    </div>
+    <div class="column" id="doing">
+      <h2>🔄 進行中</h2>
+    </div>
+    <div class="column" id="done">
+      <h2>✅ 完了</h2>
+    </div>
+  </div>
+
+  <script>
+    // 列の順番（左→右）
+    const COLUMNS = ['todo', 'doing', 'done'];
+    const COLUMN_NAMES = { todo: 'やること', doing: '進行中', done: '完了' };
+
+    // ─────────────────────────────────────────
+    // localStorage への保存・読み込み
+    // localStorage は「ブラウザが持っている小さな保存場所」
+    // キーと値のペアで文字列を保存できる
+    // ─────────────────────────────────────────
+
+    // 今のボードの状態をlocalStorageに保存する関数
+    function saveToStorage() {
+      // 全列のタスクデータを集める
+      const data = {};
+
+      COLUMNS.forEach(function(colId) {
+        // その列にある全カードを取得
+        const cards = document.querySelectorAll('#' + colId + ' .card');
+        // querySelectorAll = 条件に合う全要素をリストで取得
+        // '#todo .card' = id="todo" の中にある class="card" の要素全部
+
+        data[colId] = []; // この列のデータを空の配列で初期化
+
+        cards.forEach(function(card) {
+          // カードから各データを取り出して配列に追加
+          data[colId].push({
+            title:    card.querySelector('.card-title').textContent,
+            desc:     card.querySelector('.card-desc').textContent,
+            deadline: card.dataset.deadline, // dataset = data-*** 属性の値
+          });
+        });
+      });
+
+      // JSON.stringify = JavaScriptのオブジェクトを文字列に変換（保存できる形にする）
+      localStorage.setItem('kanban-data', JSON.stringify(data));
+      // ↑ localStorage.setItem(キー, 値) でブラウザに保存
+
+      // 「保存しました」メッセージを一時的に表示
+      const msg = document.getElementById('save-msg');
+      msg.textContent = '💾 自動保存しました';
+      setTimeout(function() { msg.textContent = ''; }, 2000);
+      // setTimeout = 指定ミリ秒後に処理を実行（2000ms = 2秒後に消す）
+    }
+
+    // localStorageからデータを読み込んでボードを復元する関数
+    function loadFromStorage() {
+      const raw = localStorage.getItem('kanban-data');
+      // localStorage.getItem(キー) = 保存した値を取得。なければ null
+
+      if (!raw) return; // 保存データがなければ何もしない
+
+      // JSON.parse = 文字列をJavaScriptのオブジェクトに戻す（saveの逆）
+      const data = JSON.parse(raw);
+
+      COLUMNS.forEach(function(colId) {
+        if (!data[colId]) return; // その列のデータがなければスキップ
+
+        data[colId].forEach(function(task) {
+          // 保存されていた各タスクからカードを作って列に追加
+          const card = createCard(task.title, task.desc, task.deadline, colId);
+          document.getElementById(colId).appendChild(card);
+        });
+      });
+    }
+
+    // ─────────────────────────────────────────
+    // タスクの追加
+    // ─────────────────────────────────────────
+
+    function addTask() {
+      const title    = document.getElementById('input-title').value.trim();
+      const desc     = document.getElementById('input-desc').value.trim();
+      const deadline = document.getElementById('input-deadline').value;
+      // type="date" のinputの .value は 'YYYY-MM-DD' 形式の文字列
+
+      if (title === '') {
+        alert('タイトルを入力してください！');
+        return;
+      }
+
+      const card = createCard(title, desc, deadline, 'todo');
+      document.getElementById('todo').appendChild(card);
+
+      // 入力欄をリセット
+      document.getElementById('input-title').value = '';
+      document.getElementById('input-desc').value = '';
+      document.getElementById('input-deadline').value = '';
+      document.getElementById('input-title').focus(); // カーソルをタイトル欄に戻す
+
+      saveToStorage(); // 追加後に保存
+    }
+
+    // ─────────────────────────────────────────
+    // カードを作る
+    // ─────────────────────────────────────────
+
+    function createCard(title, desc, deadline, currentColumn) {
+      // カードの外枠を作る
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      // dataset に期限を記録しておく（後で保存するときに使う）
+      // dataset.deadline は HTML 上で data-deadline="..." に対応する
+      card.dataset.deadline = deadline || '';
+
+      // タイトル
+      const titleEl = document.createElement('div');
+      titleEl.className = 'card-title';
+      titleEl.textContent = title;
+
+      // 説明文（空のときは表示しない）
+      const descEl = document.createElement('div');
+      descEl.className = 'card-desc';
+      if (desc) {
+        descEl.textContent = desc;
+      } else {
+        descEl.style.display = 'none'; // 非表示にする
+      }
+
+      // 期限（空のときは表示しない）
+      const deadlineEl = document.createElement('div');
+      deadlineEl.className = 'card-deadline';
+      if (deadline) {
+        const today = new Date().toISOString().split('T')[0];
+        // new Date() = 今日の日時オブジェクト
+        // .toISOString() = 'YYYY-MM-DDTHH:mm:ss.sssZ' 形式の文字列に変換
+        // .split('T')[0] = 'T' で分割して日付部分（YYYY-MM-DD）だけ取り出す
+
+        deadlineEl.textContent = '📅 期限: ' + deadline;
+
+        if (deadline < today) {
+          // 期限が今日より前なら「期限切れ」クラスを追加（赤くなる）
+          deadlineEl.classList.add('overdue');
+          deadlineEl.textContent += ' ⚠️ 期限切れ';
+        }
+      } else {
+        deadlineEl.style.display = 'none';
+      }
+
+      // ボタンエリア
+      const buttons = document.createElement('div');
+      buttons.className = 'card-buttons';
+
+      const currentIndex = COLUMNS.indexOf(currentColumn);
+
+      // 「← 戻す」ボタン（一番左の列では不要）
+      if (currentIndex > 0) {
+        const btnLeft = document.createElement('button');
+        btnLeft.className = 'btn-move-left';
+        btnLeft.textContent = '← 戻す';
+        btnLeft.onclick = function() {
+          moveCard(card, currentColumn, COLUMNS[currentIndex - 1]);
+        };
+        buttons.appendChild(btnLeft);
+      }
+
+      // 「→ 進める」ボタン（一番右の列では不要）
+      if (currentIndex < COLUMNS.length - 1) {
+        const btnRight = document.createElement('button');
+        btnRight.className = 'btn-move-right';
+        btnRight.textContent = '→ ' + COLUMN_NAMES[COLUMNS[currentIndex + 1]];
+        btnRight.onclick = function() {
+          moveCard(card, currentColumn, COLUMNS[currentIndex + 1]);
+        };
+        buttons.appendChild(btnRight);
+      }
+
+      // 「削除」ボタン
+      const btnDelete = document.createElement('button');
+      btnDelete.className = 'btn-delete';
+      btnDelete.textContent = '🗑 削除';
+      btnDelete.onclick = function() {
+        if (confirm('このタスクを削除しますか？')) {
+          card.remove();
+          saveToStorage(); // 削除後に保存
+        }
+      };
+      buttons.appendChild(btnDelete);
+
+      // 全パーツをカードに追加
+      card.appendChild(titleEl);
+      card.appendChild(descEl);
+      card.appendChild(deadlineEl);
+      card.appendChild(buttons);
+
+      return card; // 作ったカードを呼び出し元に返す
+    }
+
+    // ─────────────────────────────────────────
+    // カードを移動する
+    // ─────────────────────────────────────────
+
+    function moveCard(card, fromColumn, toColumn) {
+      // 今のカードからデータを取り出す
+      const title    = card.querySelector('.card-title').textContent;
+      const descEl   = card.querySelector('.card-desc');
+      const desc     = descEl.style.display === 'none' ? '' : descEl.textContent;
+      const deadline = card.dataset.deadline;
+
+      card.remove(); // 今のカードを削除
+
+      // 移動先の列用に新しいカードを作り直して追加
+      const newCard = createCard(title, desc, deadline, toColumn);
+      document.getElementById(toColumn).appendChild(newCard);
+
+      saveToStorage(); // 移動後に保存
+    }
+
+    // ─────────────────────────────────────────
+    // Enterキーで追加できるようにする
+    // ─────────────────────────────────────────
+    document.getElementById('input-title').addEventListener('keydown', function(e) {
+      // e = イベントオブジェクト（どのキーが押されたかなどの情報が入っている）
+      if (e.key === 'Enter') {
+        addTask();
+      }
+    });
+
+    // ─────────────────────────────────────────
+    // ページを開いたとき、保存データを読み込む
+    // ─────────────────────────────────────────
+    loadFromStorage();
+  </script>
+
+</body>
+</html>
